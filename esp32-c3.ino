@@ -4,6 +4,7 @@
 #include <BLE2902.h>
 #include "MPU6050.h"
 #include "Wire.h"
+#include <WiFi.h>
 
 #define SERVICE_UUID "9b9f77c6-7e68-4109-b987-b096233d9525"
 #define CHARACTERISTIC_UUID "1ab2c9f4-19c0-48dd-8932-ed72558ec593"
@@ -29,27 +30,45 @@ class MyServerCallbacks : public BLEServerCallbacks {
   }
 };
 
+void setup_wifi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin("Connecto Patronum", "MZ2PUD36D8N23PC2");
+  Serial.print("Connecting to WiFi ..");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(1000);
+  }
+  Serial.println(WiFi.localIP());
+}
+
 void setup_ble() {
-  BLEDevice::init("ESP32");
-  BLEServer *pServer = BLEDevice::createServer();
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-    CHARACTERISTIC_UUID,
-    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  BLEDevice::init("YourESP32");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  BLEService *pService = pServer->createService(BLEUUID(SERVICE_UUID));
+
+  Serial.println("Created service");
+
+  pCharacteristic = pService->createCharacteristic(
+    BLEUUID(CHARACTERISTIC_UUID),
+    BLECharacteristic::PROPERTY_NOTIFY);
+
+  pCharacteristic->addDescriptor(new BLE2902());
+
+  Serial.println("Created characteristic");
 
   pService->start();
-  // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
+  Serial.println("Started service");
+
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-  pAdvertising->setMinPreferred(0x12);
+  pAdvertising->addServiceUUID(BLEUUID(SERVICE_UUID));
+  pAdvertising->start();
+  Serial.println("Waiting for a client connection to notify...");
 
   uint8_t gyroData[] = { 1, 2, 3, 4, 5, 6 };
   pCharacteristic->setValue(gyroData, sizeof(gyroData));
   pCharacteristic->notify();
-  BLEDevice::startAdvertising();
-  Serial.println("Characteristic defined! Now you can read it in your phone!");
+  Serial.println("Initial notification sent");
 }
 
 void setup() {
@@ -69,6 +88,33 @@ void setup() {
   Serial.println(accelgyro.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
 
   // use the code below to change accel/gyro offset values
+  BLEDevice::init("YourESP32");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  BLEService *pService = pServer->createService(BLEUUID(SERVICE_UUID));
+
+  Serial.println("Created service");
+
+  pCharacteristic = pService->createCharacteristic(
+    BLEUUID(CHARACTERISTIC_UUID),
+    BLECharacteristic::PROPERTY_NOTIFY);
+
+  pCharacteristic->addDescriptor(new BLE2902());
+
+  Serial.println("Created characteristic");
+
+  pService->start();
+  Serial.println("Started service");
+
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(BLEUUID(SERVICE_UUID));
+  pAdvertising->start();
+  Serial.println("Waiting for a client connection to notify...");
+
+  uint8_t gyroData[] = { 1, 2, 3, 4, 5, 6 };
+  pCharacteristic->setValue(gyroData, sizeof(gyroData));
+  pCharacteristic->notify();
+  Serial.println("Initial notification sent");
   Serial.println("Updating internal sensor offsets...");
   // -76	-2359	1688	0	0	0
   Serial.print(accelgyro.getXAccelOffset());
@@ -105,27 +151,31 @@ void setup() {
   setup_ble();
 }
 
+uint8_t idx = 0;
+
 void loop() {
+  idx++;
+
   // read raw accel/gyro measurements from device
   accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-  // these methods (and a few others) are also available
-  //accelgyro.getAcceleration(&ax, &ay, &az);
-  //accelgyro.getRotation(&gx, &gy, &gz);
 
-  // display tab-separated accel/gyro x/y/z values
-  Serial.print("a/g:\t");
-  Serial.print(ax);
-  Serial.print("\t");
-  Serial.print(ay);
-  Serial.print("\t");
-  Serial.print(az);
-  Serial.print("\t");
-  Serial.print(gx);
-  Serial.print("\t");
-  Serial.print(gy);
-  Serial.print("\t");
-  Serial.println(gz);
+  if (idx % 20 == 0) {
+
+    // display tab-separated accel/gyro x/y/z values
+    Serial.print("a/g:\t");
+    Serial.print(ax);
+    Serial.print("\t");
+    Serial.print(ay);
+    Serial.print("\t");
+    Serial.print(az);
+    Serial.print("\t");
+    Serial.print(gx);
+    Serial.print("\t");
+    Serial.print(gy);
+    Serial.print("\t");
+    Serial.println(gz);
+  }
 
   if (deviceConnected) {
 
@@ -154,5 +204,5 @@ void loop() {
   }
 
 
-  delay(50);
+  delay(100);
 }
